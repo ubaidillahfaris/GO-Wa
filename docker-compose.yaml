@@ -1,0 +1,35 @@
+services:
+  app:
+    container_name: app-wa
+    build: .
+    volumes:
+      - app:/app
+    networks:
+      - app-wa
+
+  web:
+    container_name: web-wa
+    image: nginx
+    ports:
+      - 80:80
+    volumes:
+      - app:/app
+    networks:
+      - app-wa
+
+  mongo:
+    container_name: mongo-wa
+    image: mongo
+    volumes:
+      - ./docker/mongo/db:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    networks:
+      - app-wa
+
+volumes:
+  app:
+
+networks:
+  app-wa:
