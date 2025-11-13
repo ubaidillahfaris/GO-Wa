@@ -44,8 +44,8 @@ func InitMongoService() (*MongoService, error) {
 		username := os.Getenv("MONGO_USER")
 		password := os.Getenv("MONGO_PASS")
 		host := os.Getenv("MONGO_HOST")
-		if host == "" {
-			host = "127.0.0.1:27017"
+		if host == "" && os.Getenv("MONGO_PORT") != "" {
+			host = fmt.Sprintf("127.0.0.1:%s", os.Getenv("MONGO_PORT"))
 		}
 		dbName := os.Getenv("MONGO_DB")
 		if dbName == "" {
