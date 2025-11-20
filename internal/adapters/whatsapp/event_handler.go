@@ -7,8 +7,9 @@ import (
 
 // EventHandler handles WhatsApp events
 type EventHandler struct {
-	logger            *logger.Logger
-	messageHandlers   []MessageHandlerFunc
+	logger             *logger.Logger
+	messageRegistry    domain.MessageProcessorRegistry
+	messageHandlers    []MessageHandlerFunc
 	connectionHandlers []ConnectionHandlerFunc
 }
 
@@ -19,10 +20,11 @@ type MessageHandlerFunc func(deviceName string, message domain.WhatsAppMessage) 
 type ConnectionHandlerFunc func(deviceName string, connected bool)
 
 // NewEventHandler creates a new event handler
-func NewEventHandler() *EventHandler {
+func NewEventHandler(messageRegistry domain.MessageProcessorRegistry) *EventHandler {
 	return &EventHandler{
-		logger:            logger.New("EventHandler"),
-		messageHandlers:   make([]MessageHandlerFunc, 0),
+		logger:             logger.New("EventHandler"),
+		messageRegistry:    messageRegistry,
+		messageHandlers:    make([]MessageHandlerFunc, 0),
 		connectionHandlers: make([]ConnectionHandlerFunc, 0),
 	}
 }
@@ -77,7 +79,27 @@ func (h *EventHandler) OnMessage(deviceName string, message domain.WhatsAppMessa
 		"type":   message.Type,
 	}).Info("Message received")
 
-	// Process message through all registered handlers
+	// Convert to IncomingMessage for processing
+	incomingMsg := domain.IncomingMessage{
+		ID:         message.ID,
+		DeviceName: deviceName,
+		From:       message.From,
+		Content:    message.Content,
+		Timestamp:  message.Timestamp,
+		IsGroup:    message.ReceiverType == domain.ReceiverGroup,
+	}
+
+	// Process through message registry
+	if h.messageRegistry != nil {
+		if err := h.messageRegistry.Process(incomingMsg); err != nil {
+			h.logger.WithFields(map[string]interface{}{
+				"device": deviceName,
+				"error":  err.Error(),
+			}).Error("Message processing failed")
+		}
+	}
+
+	// Process message through all registered legacy handlers
 	for _, handler := range h.messageHandlers {
 		if err := handler(deviceName, message); err != nil {
 			h.logger.WithFields(map[string]interface{}{
