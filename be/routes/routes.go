@@ -145,7 +145,7 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 			// API Key test endpoint (requires API Key authentication via X-API-Key header)
 			apiKeyTestGroup := r.Group("/api-keys")
 			{
-				apiKeyTestGroup.POST("/test", middlewares.APIKeyMiddleware(), apiKeyHandler.TestKey)
+				apiKeyTestGroup.POST("/test", middlewares.APIKeyMiddleware(appContainer.ValidateAPIKeyUC), apiKeyHandler.TestKey)
 			}
 		}
 	}
