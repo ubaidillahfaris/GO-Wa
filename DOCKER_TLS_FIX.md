@@ -1,12 +1,12 @@
-# 🔧 Docker TLS Certificate Fix
+# 🔧 Docker Build Fixes (TLS + GCC)
 
-Quick guide untuk rebuild Docker container dengan TLS fix.
+Complete guide untuk rebuild Docker container dengan TLS dan GCC compilation fixes.
 
 ---
 
-## 🐛 **Issue yang Di-fix**
+## 🐛 **Issues yang Di-fix**
 
-**Error sebelumnya:**
+### **Issue #1: TLS Certificate Error**
 ```json
 {
     "details": "[device-id] gagal connect: couldn't dial whatsapp web websocket: tls: failed to verify certificate: x509: certificate signed by unknown authority",
@@ -19,18 +19,33 @@ Quick guide untuk rebuild Docker container dengan TLS fix.
 - Go's crypto/tls package butuh proper certificate verification
 - Whatsmeow WebSocket connection gagal karena certificate validation
 
+### **Issue #2: GCC Compilation Error**
+```
+# runtime/cgo
+gcc: error: unrecognized command-line option '-m64'
+exit code: 1
+```
+
+**Root Cause:**
+- Alpine's musl-based GCC incompatible dengan Go's CGO cross-compilation
+- GOARCH=amd64 flag causing architecture mismatch
+- Build fails during runtime/cgo compilation
+
 ---
 
-## ✅ **Solution Applied**
+## ✅ **Solutions Applied**
 
-**Changed:**
-- Runtime base image: `alpine:latest` → `debian:bookworm-slim`
-- Explicit `update-ca-certificates` during build
-- Better TLS/SSL support
+### **For Both Issues:**
+- **Builder stage:** `golang:1.25.1-alpine` → `golang:1.25.1-bookworm`
+- **Runtime stage:** `alpine:latest` → `debian:bookworm-slim`
+- **Build deps:** Use Debian's GCC with proper libc support
+- **CA certificates:** Explicit update-ca-certificates
+- **Architecture:** Auto-detect (removed explicit GOARCH)
 
 **Trade-offs:**
-- Image size: ~80-100MB (naik dari ~50MB)
-- **Worth it:** Production-stable TLS connections
+- Builder image: ~800MB (was ~300MB Alpine) - doesn't affect final image
+- Runtime image: ~100MB (was ~50MB Alpine)
+- **Worth it:** Reliable builds + stable TLS connections
 
 ---
 
@@ -169,32 +184,56 @@ docker-compose exec app nslookup web.whatsapp.com
 
 ## 📊 **Before vs After**
 
-### **Before (Alpine)**
+### **Before (Alpine - Both Issues)**
+
+**Builder:**
+```dockerfile
+FROM golang:1.25.1-alpine AS builder
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+ENV GOARCH=amd64  # ❌ Causes GCC error
+RUN go build -o main .
+```
+
+**Runtime:**
 ```dockerfile
 FROM alpine:latest
-RUN apk add --no-cache \
-    ca-certificates \
-    sqlite-libs \
-    tzdata
+RUN apk add --no-cache ca-certificates sqlite-libs tzdata
 ```
-- ❌ TLS errors
-- ❌ Incomplete CA bundle
-- ✅ Small image (~50MB)
 
-### **After (Debian)**
+**Problems:**
+- ❌ **GCC Error:** `gcc: error: unrecognized command-line option '-m64'`
+- ❌ **TLS Error:** `x509: certificate signed by unknown authority`
+- ❌ Incomplete CA bundle
+- ❌ Build fails
+- ✅ Small images (builder: ~300MB, runtime: ~50MB)
+
+### **After (Debian - All Fixed)**
+
+**Builder:**
+```dockerfile
+FROM golang:1.25.1-bookworm AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libc6-dev libsqlite3-dev
+ENV CGO_ENABLED=1  # ✅ Auto-detect architecture
+RUN go build -o main -ldflags="-s -w" .
+```
+
+**Runtime:**
 ```dockerfile
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    libsqlite3-0 \
-    tzdata \
-    wget \
+    ca-certificates libsqlite3-0 tzdata wget \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 ```
-- ✅ TLS works perfectly
-- ✅ Complete CA bundle
-- ✅ Production-stable (~80-100MB)
+
+**Benefits:**
+- ✅ **Build works:** No GCC errors
+- ✅ **TLS works:** Complete CA bundle
+- ✅ **CGO works:** SQLite fully functional
+- ✅ **Production-stable:** Proven toolchain
+- ⚠️ Larger images (builder: ~800MB, runtime: ~100MB)
+- ✅ **Final image unchanged:** Builder size doesn't matter!
 
 ---
 
