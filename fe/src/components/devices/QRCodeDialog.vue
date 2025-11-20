@@ -94,6 +94,7 @@ function handleRefresh() {
           <div class="bg-white p-4 rounded-lg border">
             <img
               :src="qrCodeUrl"
+              :key="qrCodeUrl"
               alt="WhatsApp QR Code"
               class="w-64 h-64 object-contain"
             />
