@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,23 +10,24 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 
 const router = useRouter()
 const authStore = useAuthStore()
+const toast = useToast()
 
 const username = ref('')
 const password = ref('')
 
 async function handleLogin() {
-  console.log('Attempting login...')
   const success = await authStore.login({
     username: username.value,
     password: password.value,
   })
-  console.log('Login success status:', success)
 
   if (success) {
-    console.log('Login successful, redirecting to dashboard...')
+    toast.success('Login successful! Redirecting...')
+    // Wait for next tick to ensure store is updated
+    await nextTick()
     router.push({ name: 'dashboard' })
   } else {
-    console.log('Login failed.')
+    toast.error(authStore.error || 'Login failed')
   }
 }
 </script>

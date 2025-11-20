@@ -34,10 +34,14 @@ export const useAuthStore = defineStore('auth', () => {
 
         localStorage.setItem('auth_token', response.data.token)
         localStorage.setItem('user', JSON.stringify(response.data.user))
+
+        // Clear any previous errors
+        error.value = null
       }
 
       return true
     } catch (err: any) {
+      console.error('Login error:', err)
       error.value = err.response?.data?.error || 'Login failed'
       return false
     } finally {
