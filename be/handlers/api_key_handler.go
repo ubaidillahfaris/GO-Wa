@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -8,6 +9,28 @@ import (
 	"github.com/ubaidillahfaris/whatsapp.git/internal/core/usecases/apikey"
 	"github.com/ubaidillahfaris/whatsapp.git/internal/pkg/errors"
 )
+
+// handleError is a helper function to handle errors consistently
+func handleError(c *gin.Context, err error) {
+	if customErr, ok := err.(*errors.CustomError); ok {
+		statusCode := http.StatusInternalServerError
+		switch customErr.Type {
+		case errors.ErrTypeValidation:
+			statusCode = http.StatusBadRequest
+		case errors.ErrTypeUnauthorized:
+			statusCode = http.StatusUnauthorized
+		case errors.ErrTypeNotFound:
+			statusCode = http.StatusNotFound
+		case errors.ErrTypeConflict:
+			statusCode = http.StatusConflict
+		}
+		c.JSON(statusCode, gin.H{"error": customErr.Message})
+		c.Abort()
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	c.Abort()
+}
 
 // APIKeyHandler handles API key management requests
 type APIKeyHandler struct {

@@ -1,12 +1,36 @@
 package middlewares
 
 import (
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ubaidillahfaris/whatsapp.git/internal/core/domain"
 	"github.com/ubaidillahfaris/whatsapp.git/internal/core/usecases/apikey"
 	"github.com/ubaidillahfaris/whatsapp.git/internal/pkg/errors"
 )
+
+// handleError is a helper function to handle errors consistently in middleware
+func handleError(c *gin.Context, err error) {
+	if customErr, ok := err.(*errors.CustomError); ok {
+		statusCode := http.StatusInternalServerError
+		switch customErr.Type {
+		case errors.ErrTypeValidation:
+			statusCode = http.StatusBadRequest
+		case errors.ErrTypeUnauthorized:
+			statusCode = http.StatusUnauthorized
+		case errors.ErrTypeNotFound:
+			statusCode = http.StatusNotFound
+		case errors.ErrTypeConflict:
+			statusCode = http.StatusConflict
+		}
+		c.JSON(statusCode, gin.H{"error": customErr.Message})
+		c.Abort()
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	c.Abort()
+}
 
 const (
 	// APIKeyHeader is the header name for API key
@@ -102,11 +126,11 @@ func APIKeyWithPermissionMiddleware(validateUC *apikey.ValidateKeyUseCase, resou
 }
 
 // GetAPIKeyFromContext retrieves the API key from the Gin context
-func GetAPIKeyFromContext(c *gin.Context) (*apikey.ValidateKeyUseCase, bool) {
+func GetAPIKeyFromContext(c *gin.Context) (*domain.APIKey, bool) {
 	key, exists := c.Get(ContextKeyAPIKey)
 	if !exists {
 		return nil, false
 	}
-	validateUC, ok := key.(*apikey.ValidateKeyUseCase)
-	return validateUC, ok
+	apiKey, ok := key.(*domain.APIKey)
+	return apiKey, ok
 }
