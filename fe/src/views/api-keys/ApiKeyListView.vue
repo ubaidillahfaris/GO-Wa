@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { apiKeysApi } from '@/api/apiKeys'
+import { useToast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Plus, Trash2, Copy } from 'lucide-vue-next'
+import ApiKeyCreateDialog from '@/components/api-keys/ApiKeyCreateDialog.vue'
 import type { ApiKey } from '@/types'
 
+const toast = useToast()
 const apiKeys = ref<ApiKey[]>([])
 const loading = ref(false)
+const showCreateDialog = ref(false)
 
 async function loadApiKeys() {
   try {
@@ -18,24 +22,40 @@ async function loadApiKeys() {
     }
   } catch (error) {
     console.error('Failed to load API keys:', error)
+    toast.error('Failed to load API keys')
   } finally {
     loading.value = false
   }
 }
 
-function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text)
-  alert('Copied to clipboard!')
+function openCreateDialog() {
+  showCreateDialog.value = true
+}
+
+function handleApiKeyCreated() {
+  loadApiKeys()
+}
+
+async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success('Copied to clipboard!')
+  } catch (error) {
+    console.error('Failed to copy:', error)
+    toast.error('Failed to copy to clipboard')
+  }
 }
 
 async function revokeKey(id: string) {
-  if (!confirm('Are you sure you want to revoke this API key?')) return
+  if (!confirm('Are you sure you want to revoke this API key? This action cannot be undone.')) return
 
   try {
     await apiKeysApi.revoke(id)
+    toast.success('API key revoked successfully')
     await loadApiKeys()
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to revoke API key:', error)
+    toast.error(error.response?.data?.error || 'Failed to revoke API key')
   }
 }
 
@@ -51,7 +71,7 @@ onMounted(() => {
         <h2 class="text-3xl font-bold text-gray-900">API Keys</h2>
         <p class="text-gray-600 mt-1">Manage your API keys for programmatic access</p>
       </div>
-      <Button>
+      <Button @click="openCreateDialog">
         <Plus class="w-4 h-4 mr-2" />
         Generate API Key
       </Button>
@@ -135,5 +155,11 @@ onMounted(() => {
         </CardContent>
       </Card>
     </div>
+
+    <ApiKeyCreateDialog
+      :open="showCreateDialog"
+      @update:open="showCreateDialog = $event"
+      @created="handleApiKeyCreated"
+    />
   </div>
 </template>
