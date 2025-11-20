@@ -53,9 +53,5 @@ USER appuser
 # Expose port (configured via env)
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:${PORT:-3000}/health || exit 1
-
 # Run the application
 CMD ["./main"]
