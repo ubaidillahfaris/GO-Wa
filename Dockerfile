@@ -21,17 +21,20 @@ ENV GOARCH=amd64
 RUN go build -o main -ldflags="-s -w" .
 
 # ---------- Run Stage ----------
-FROM alpine:latest
+FROM debian:bookworm-slim
 
 # Install runtime dependencies
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    sqlite-libs \
-    tzdata
+    libsqlite3-0 \
+    tzdata \
+    wget \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create app user for security
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser
+RUN groupadd -g 1000 appuser && \
+    useradd -r -u 1000 -g appuser appuser
 
 WORKDIR /app
 
