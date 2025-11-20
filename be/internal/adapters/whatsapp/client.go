@@ -45,11 +45,11 @@ type Client struct {
 
 // ClientConfig holds configuration for creating a new client
 type ClientConfig struct {
-	DeviceName       string
-	StoresDir        string
-	EventHandler     domain.WhatsAppEventHandler
-	MaxConcurrency   int
-	LogLevel         string
+	DeviceName     string
+	StoresDir      string
+	EventHandler   domain.WhatsAppEventHandler
+	MaxConcurrency int
+	LogLevel       string
 }
 
 // NewClient creates a new WhatsApp client
@@ -449,13 +449,7 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 	}
 
 	groups := make([]domain.WhatsAppGroup, 0, len(joinedGroups))
-	for _, groupJID := range joinedGroups {
-		// Get group info with retry logic
-		groupInfo, err := c.getGroupInfoWithRetry(ctx, groupJID)
-		if err != nil {
-			c.logger.Warn("Failed to get info for group %s: %v", groupJID.String(), err)
-			continue
-		}
+	for _, groupInfo := range joinedGroups {
 
 		if groupInfo == nil {
 			continue
@@ -473,14 +467,14 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 		}
 
 		groups = append(groups, domain.WhatsAppGroup{
-			JID:          groupJID.String(),
-			Name:         groupInfo.Name,
-			Topic:        groupInfo.Topic,
+			JID:          groupInfo.JID.String(),
+			Name:         groupInfo.GroupName.Name,
+			Topic:        groupInfo.GroupTopic.Topic,
 			OwnerJID:     ownerJID,
 			Participants: participants,
-			IsAnnounce:   groupInfo.IsAnnounce,
-			IsLocked:     groupInfo.IsLocked,
-			IsEphemeral:  groupInfo.IsEphemeral,
+			IsAnnounce:   groupInfo.GroupAnnounce.IsAnnounce,
+			IsLocked:     groupInfo.GroupLocked.IsLocked,
+			IsEphemeral:  groupInfo.GroupEphemeral.IsEphemeral,
 			CreatedAt:    groupInfo.GroupCreated,
 		})
 	}
