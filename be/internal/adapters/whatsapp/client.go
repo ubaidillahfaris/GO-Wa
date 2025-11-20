@@ -449,11 +449,11 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 	}
 
 	groups := make([]domain.WhatsAppGroup, 0, len(joinedGroups))
-	for _, jid := range joinedGroups {
+	for _, groupJID := range joinedGroups {
 		// Get group info with retry logic
-		groupInfo, err := c.getGroupInfoWithRetry(ctx, jid)
+		groupInfo, err := c.getGroupInfoWithRetry(ctx, groupJID)
 		if err != nil {
-			c.logger.Warn("Failed to get info for group %s: %v", jid.String(), err)
+			c.logger.Warn("Failed to get info for group %s: %v", groupJID.String(), err)
 			continue
 		}
 
@@ -473,7 +473,7 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 		}
 
 		groups = append(groups, domain.WhatsAppGroup{
-			JID:          jid.String(),
+			JID:          groupJID.String(),
 			Name:         groupInfo.Name,
 			Topic:        groupInfo.Topic,
 			OwnerJID:     ownerJID,
