@@ -208,3 +208,23 @@ func (h *APIKeyHandler) RevokeKey(c *gin.Context) {
 		"message": "API key revoked successfully",
 	})
 }
+
+// TestKey handles POST /api-keys/test - Test an API key validity
+// This endpoint uses API key authentication (X-API-Key header)
+func (h *APIKeyHandler) TestKey(c *gin.Context) {
+	// Get username from context (set by API key middleware)
+	username, exists := c.Get("username")
+	if !exists {
+		handleError(c, errors.New(errors.ErrTypeUnauthorized, "API key authentication failed"))
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "API key is valid",
+		"status":  "success",
+		"data": gin.H{
+			"authenticated_as": username,
+			"valid":            true,
+		},
+	})
+}

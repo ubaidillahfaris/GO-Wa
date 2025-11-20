@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import axios from 'axios'
 import { apiKeysApi } from '@/api/apiKeys'
 import { useToast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Plus, Trash2, Copy } from 'lucide-vue-next'
+import { Plus, Trash2, Copy, Play } from 'lucide-vue-next'
 import ApiKeyCreateDialog from '@/components/api-keys/ApiKeyCreateDialog.vue'
 import type { ApiKey } from '@/types'
 
@@ -12,6 +13,7 @@ const toast = useToast()
 const apiKeys = ref<ApiKey[]>([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
+const testingKeys = ref<Set<string>>(new Set())
 
 async function loadApiKeys() {
   try {
@@ -56,6 +58,43 @@ async function revokeKey(id: string) {
   } catch (error: any) {
     console.error('Failed to revoke API key:', error)
     toast.error(error.response?.data?.error || 'Failed to revoke API key')
+  }
+}
+
+async function testApiKey(apiKey: ApiKey) {
+  testingKeys.value.add(apiKey.id)
+
+  try {
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+
+    // Make a test request to /api-keys/test endpoint using the API key
+    const response = await axios.post(`${baseURL}/api-keys/test`, {}, {
+      headers: {
+        'X-API-Key': apiKey.key
+      },
+      timeout: 10000
+    })
+
+    if (response.status === 200 && response.data?.status === 'success') {
+      const username = response.data?.data?.authenticated_as || 'unknown'
+      toast.success(`API Key "${apiKey.name}" is valid! Authenticated as: ${username}`)
+    } else {
+      toast.error(`API Key test failed with status: ${response.status}`)
+    }
+  } catch (error: any) {
+    console.error('Failed to test API key:', error)
+
+    if (error.response?.status === 401) {
+      toast.error('API Key is invalid or has been revoked')
+    } else if (error.response?.status === 403) {
+      toast.error('API Key does not have permission to access this resource')
+    } else if (error.code === 'ECONNABORTED') {
+      toast.error('Test request timed out')
+    } else {
+      toast.error(error.response?.data?.error || 'Failed to test API key')
+    }
+  } finally {
+    testingKeys.value.delete(apiKey.id)
   }
 }
 
@@ -118,17 +157,28 @@ onMounted(() => {
         </CardHeader>
         <CardContent>
           <div class="space-y-3">
-            <div class="flex items-center gap-2">
-              <code class="flex-1 px-3 py-2 bg-gray-100 rounded text-sm font-mono">
+            <div class="flex items-start gap-2">
+              <code class="flex-1 px-3 py-2 bg-gray-100 rounded text-sm font-mono break-all">
                 {{ apiKey.key }}
               </code>
-              <Button
-                @click="copyToClipboard(apiKey.key)"
-                variant="outline"
-                size="icon"
-              >
-                <Copy class="w-4 h-4" />
-              </Button>
+              <div class="flex gap-2">
+                <Button
+                  @click="testApiKey(apiKey)"
+                  variant="outline"
+                  size="icon"
+                  :disabled="testingKeys.has(apiKey.id) || apiKey.status !== 'active'"
+                  :title="apiKey.status !== 'active' ? 'Cannot test inactive or revoked keys' : 'Test API Key'"
+                >
+                  <Play class="w-4 h-4" />
+                </Button>
+                <Button
+                  @click="copyToClipboard(apiKey.key)"
+                  variant="outline"
+                  size="icon"
+                >
+                  <Copy class="w-4 h-4" />
+                </Button>
+              </div>
             </div>
 
             <div class="grid grid-cols-2 gap-4 text-sm">

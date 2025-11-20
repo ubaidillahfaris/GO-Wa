@@ -141,6 +141,12 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 				apiKeyGroup.PUT("/:id", apiKeyHandler.UpdateKey)      // Update API key
 				apiKeyGroup.DELETE("/:id", apiKeyHandler.RevokeKey)   // Revoke (delete) API key
 			}
+
+			// API Key test endpoint (requires API Key authentication via X-API-Key header)
+			apiKeyTestGroup := r.Group("/api-keys")
+			{
+				apiKeyTestGroup.POST("/test", middlewares.APIKeyMiddleware(), apiKeyHandler.TestKey)
+			}
 		}
 	}
 
