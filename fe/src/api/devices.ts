@@ -12,7 +12,7 @@ export const devicesApi = {
     return response.data
   },
 
-  async create(data: { name: string }) {
+  async create(data: { name: string; owner: string; status?: string }) {
     const response = await apiClient.post<ApiResponse<Device>>('/devices', data)
     return response.data
   },

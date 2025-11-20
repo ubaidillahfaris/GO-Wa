@@ -2,8 +2,10 @@ import apiClient from './client'
 import type { Contact, Group, ApiResponse, MessagePayload } from '@/types'
 
 export const whatsappApi = {
-  async getQRCode(device: string) {
-    const response = await apiClient.get<ApiResponse<{ qr: string }>>(`/whatsapp/${device}/qrcode`)
+  async getQRCode(device: string): Promise<Blob> {
+    const response = await apiClient.get(`/whatsapp/${device}/qrcode`, {
+      responseType: 'blob'
+    })
     return response.data
   },
 
