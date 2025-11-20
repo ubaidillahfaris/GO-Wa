@@ -466,11 +466,17 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 			participants = append(participants, p.JID.String())
 		}
 
+		// Get owner JID as string
+		ownerJID := ""
+		if groupInfo.OwnerJID != nil {
+			ownerJID = groupInfo.OwnerJID.String()
+		}
+
 		groups = append(groups, domain.WhatsAppGroup{
 			JID:          jid.String(),
 			Name:         groupInfo.Name,
 			Topic:        groupInfo.Topic,
-			OwnerJID:     groupInfo.OwnerJID.String(),
+			OwnerJID:     ownerJID,
 			Participants: participants,
 			IsAnnounce:   groupInfo.IsAnnounce,
 			IsLocked:     groupInfo.IsLocked,
