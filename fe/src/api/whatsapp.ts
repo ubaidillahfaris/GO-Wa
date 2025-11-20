@@ -15,6 +15,11 @@ export const whatsappApi = {
     return response.data
   },
 
+  async getStatus(device: string) {
+    const response = await apiClient.get<{ status: string; device: string }>(`/whatsapp/${device}/status`)
+    return response.data
+  },
+
   async disconnect(device: string) {
     const response = await apiClient.get<ApiResponse>(`/whatsapp/${device}/disconnect`)
     return response.data

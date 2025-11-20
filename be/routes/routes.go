@@ -98,6 +98,7 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 	wa := r.Group("/whatsapp")
 	{
 		wa.GET("/:device/qrcode", whatsapp.GenerateQR)
+		wa.GET("/:device/status", whatsapp.GetStatus)
 		wa.GET("/:device/disconnect", whatsapp.Disconnect)
 		wa.GET("/:device/contacts", whatsapp.ListContacts)
 		wa.GET("/:device/groups", whatsapp.ListGroups)

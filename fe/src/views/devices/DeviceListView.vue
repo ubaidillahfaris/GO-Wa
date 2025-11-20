@@ -30,7 +30,36 @@ async function loadDevices(silent = false) {
     }
     const response = await devicesApi.list()
     if (response.data) {
-      devices.value = response.data
+      // Check real WhatsApp connection status for each device
+      const devicesWithStatus = await Promise.all(
+        response.data.map(async (device: Device) => {
+          try {
+            // Check actual WhatsApp connection status
+            const statusResponse = await whatsappApi.getStatus(device._id)
+            const actualStatus = statusResponse.status || device.status
+
+            // Map backend status to frontend status
+            let mappedStatus: 'active' | 'inactive' | 'disconnected' = device.status
+            if (actualStatus === 'connected') {
+              mappedStatus = 'active'
+            } else if (actualStatus === 'disconnected' || actualStatus === 'not connected') {
+              mappedStatus = 'disconnected'
+            } else {
+              mappedStatus = 'inactive'
+            }
+
+            return {
+              ...device,
+              status: mappedStatus
+            }
+          } catch (error) {
+            // If status check fails, use database status
+            console.error(`Failed to check status for device ${device._id}:`, error)
+            return device
+          }
+        })
+      )
+      devices.value = devicesWithStatus
     }
   } catch (error) {
     console.error('Failed to load devices:', error)
