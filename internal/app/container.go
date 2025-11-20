@@ -8,6 +8,7 @@ import (
 	"github.com/ubaidillahfaris/whatsapp.git/internal/adapters/whatsapp"
 	"github.com/ubaidillahfaris/whatsapp.git/internal/core/domain"
 	"github.com/ubaidillahfaris/whatsapp.git/internal/core/ports"
+	"github.com/ubaidillahfaris/whatsapp.git/internal/core/usecases/apikey"
 	"github.com/ubaidillahfaris/whatsapp.git/internal/core/usecases/device"
 	"github.com/ubaidillahfaris/whatsapp.git/internal/core/usecases/message"
 	"github.com/ubaidillahfaris/whatsapp.git/internal/modules/quickresponse"
@@ -30,6 +31,7 @@ type Container struct {
 	// Repositories
 	DeviceRepository ports.DeviceRepository
 	QRRepository     qrDomain.QuickResponseRepository
+	APIKeyRepository domain.APIKeyRepository
 
 	// Message Processing
 	MessageRegistry domain.MessageProcessorRegistry
@@ -49,6 +51,13 @@ type Container struct {
 
 	// Use Cases - Message
 	ProcessMessageUC *message.ProcessMessageUseCase
+
+	// Use Cases - API Key
+	GenerateAPIKeyUC *apikey.GenerateKeyUseCase
+	ListAPIKeysUC    *apikey.ListKeysUseCase
+	RevokeAPIKeyUC   *apikey.RevokeKeyUseCase
+	UpdateAPIKeyUC   *apikey.UpdateKeyUseCase
+	ValidateAPIKeyUC *apikey.ValidateKeyUseCase
 
 	logger *logger.Logger
 }
@@ -126,6 +135,13 @@ func (c *Container) initRepositories() error {
 	// Quick Response repository
 	c.QRRepository = qrRepo.NewMongoRepository(c.MongoDB)
 
+	// API Key repository
+	apiKeyRepo, err := repositories.NewAPIKeyMongoRepository(c.MongoDB, c.logger)
+	if err != nil {
+		return fmt.Errorf("failed to create API key repository: %w", err)
+	}
+	c.APIKeyRepository = apiKeyRepo
+
 	c.logger.Success("Repositories initialized")
 	return nil
 }
@@ -181,6 +197,13 @@ func (c *Container) initUseCases() error {
 
 	// Message use cases
 	c.ProcessMessageUC = message.NewProcessMessageUseCase(c.MessageRegistry)
+
+	// API Key use cases
+	c.GenerateAPIKeyUC = apikey.NewGenerateKeyUseCase(c.APIKeyRepository, c.logger)
+	c.ListAPIKeysUC = apikey.NewListKeysUseCase(c.APIKeyRepository, c.logger)
+	c.RevokeAPIKeyUC = apikey.NewRevokeKeyUseCase(c.APIKeyRepository, c.logger)
+	c.UpdateAPIKeyUC = apikey.NewUpdateKeyUseCase(c.APIKeyRepository, c.logger)
+	c.ValidateAPIKeyUC = apikey.NewValidateKeyUseCase(c.APIKeyRepository, c.logger)
 
 	c.logger.Success("Use cases initialized")
 	return nil
