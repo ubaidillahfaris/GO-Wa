@@ -36,7 +36,9 @@ func setup() (*gin.Engine, error) {
 	r.Use(cors.New(config))
 	r.OPTIONS("/*path", func(c *gin.Context) { c.Status(200) })
 
-	routes.RegisterRoutes(r, mongo, manager)
+	// Pass nil for container to maintain backward compatibility
+	// TODO: Migrate to container-based initialization for full Clean Architecture support
+	routes.RegisterRoutes(r, mongo, manager, nil)
 
 	return r, nil
 }

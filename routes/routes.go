@@ -8,11 +8,12 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/ubaidillahfaris/whatsapp.git/db"
 	"github.com/ubaidillahfaris/whatsapp.git/handlers"
+	"github.com/ubaidillahfaris/whatsapp.git/internal/app"
 	"github.com/ubaidillahfaris/whatsapp.git/middlewares"
 	"github.com/ubaidillahfaris/whatsapp.git/services"
 )
 
-func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.WhatsAppManager) {
+func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.WhatsAppManager, container interface{}) {
 
 	// Health check endpoint (for Docker health checks)
 	r.GET("/health", func(c *gin.Context) {
@@ -115,6 +116,31 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 	msg := r.Group("/send_message")
 	{
 		msg.POST("/:device", whatsapp.SendMessage)
+	}
+
+	// API Key routes (JWT protected for management)
+	// Only register if container is provided (new architecture)
+	if container != nil {
+		if appContainer, ok := container.(*app.Container); ok {
+			// Create API Key handler
+			apiKeyHandler := handlers.NewAPIKeyHandler(
+				appContainer.GenerateAPIKeyUC,
+				appContainer.ListAPIKeysUC,
+				appContainer.RevokeAPIKeyUC,
+				appContainer.UpdateAPIKeyUC,
+			)
+
+			// API Key management endpoints (requires JWT authentication)
+			apiKeyGroup := r.Group("/api-keys")
+			apiKeyGroup.Use(middlewares.JWTAuthMiddleware())
+			{
+				apiKeyGroup.POST("", apiKeyHandler.GenerateKey)       // Generate new API key
+				apiKeyGroup.GET("", apiKeyHandler.ListKeys)           // List all user's API keys
+				apiKeyGroup.GET("/:id", apiKeyHandler.GetKey)         // Get specific API key
+				apiKeyGroup.PUT("/:id", apiKeyHandler.UpdateKey)      // Update API key
+				apiKeyGroup.DELETE("/:id", apiKeyHandler.RevokeKey)   // Revoke (delete) API key
+			}
+		}
 	}
 
 }
