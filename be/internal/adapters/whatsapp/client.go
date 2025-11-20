@@ -466,9 +466,9 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 			participants = append(participants, p.JID.String())
 		}
 
-		// Get owner JID as string
+		// Get owner JID as string - OwnerJID is a value type, not pointer
 		ownerJID := ""
-		if groupInfo.OwnerJID != nil {
+		if groupInfo.OwnerJID.User != "" {
 			ownerJID = groupInfo.OwnerJID.String()
 		}
 
@@ -493,7 +493,7 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 func (c *Client) getGroupInfoWithRetry(ctx context.Context, jid types.JID) (*types.GroupInfo, error) {
 	maxRetries := 3
 	for i := 0; i < maxRetries; i++ {
-		info, err := c.client.GetGroupInfo(ctx, jid)
+		info, err := c.client.GetGroupInfo(jid)
 		if err == nil {
 			return info, nil
 		}
