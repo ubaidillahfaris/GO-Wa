@@ -14,6 +14,11 @@ import (
 
 func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.WhatsAppManager) {
 
+	// Health check endpoint (for Docker health checks)
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok"})
+	})
+
 	// Authentication routes
 	authHandler := handlers.NewAuthenticateHandler()
 	auth := r.Group("/auth")
