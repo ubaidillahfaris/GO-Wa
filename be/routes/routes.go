@@ -37,7 +37,15 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 	}
 
 	sync := r.Group("/sync")
-	sync.Use(middlewares.JWTAuthMiddleware())
+	if container != nil {
+		if appContainer, ok := container.(*app.Container); ok {
+			sync.Use(middlewares.APIKeyOrJWTMiddleware(appContainer.ValidateAPIKeyUC))
+		} else {
+			sync.Use(middlewares.JWTAuthMiddleware())
+		}
+	} else {
+		sync.Use(middlewares.JWTAuthMiddleware())
+	}
 	{
 		sync.POST("/app", handlers.NewSyncHandler().SyncApp)
 	}
@@ -84,7 +92,15 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 	deviceHandler := handlers.NewDeviceHandler(mongo)
 
 	device := r.Group("/devices")
-	device.Use(middlewares.JWTAuthMiddleware())
+	if container != nil {
+		if appContainer, ok := container.(*app.Container); ok {
+			device.Use(middlewares.APIKeyOrJWTMiddleware(appContainer.ValidateAPIKeyUC))
+		} else {
+			device.Use(middlewares.JWTAuthMiddleware())
+		}
+	} else {
+		device.Use(middlewares.JWTAuthMiddleware())
+	}
 	{
 		device.POST("", deviceHandler.CreateDevice)
 		device.GET("", deviceHandler.ListDevices)
@@ -96,6 +112,15 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 	// WhatsApp routes
 	whatsapp := handlers.NewWhatsAppHandler()
 	wa := r.Group("/whatsapp")
+	if container != nil {
+		if appContainer, ok := container.(*app.Container); ok {
+			wa.Use(middlewares.APIKeyOrJWTMiddleware(appContainer.ValidateAPIKeyUC))
+		} else {
+			wa.Use(middlewares.JWTAuthMiddleware())
+		}
+	} else {
+		wa.Use(middlewares.JWTAuthMiddleware())
+	}
 	{
 		wa.GET("/:device/qrcode", whatsapp.GenerateQR)
 		wa.GET("/:device/status", whatsapp.GetStatus)
@@ -107,14 +132,31 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 	// Quick Response routes
 	qrHandler := handlers.NewQuickResponseHandler()
 	qr := r.Group("/quick_response")
+	if container != nil {
+		if appContainer, ok := container.(*app.Container); ok {
+			qr.Use(middlewares.APIKeyOrJWTMiddleware(appContainer.ValidateAPIKeyUC))
+		} else {
+			qr.Use(middlewares.JWTAuthMiddleware())
+		}
+	} else {
+		qr.Use(middlewares.JWTAuthMiddleware())
+	}
 	{
 		qr.GET("/", qrHandler.GetAll)
 		qr.DELETE("/:id", qrHandler.DeleteId)
 	}
 
 	// Send Message routes
-
 	msg := r.Group("/send_message")
+	if container != nil {
+		if appContainer, ok := container.(*app.Container); ok {
+			msg.Use(middlewares.APIKeyOrJWTMiddleware(appContainer.ValidateAPIKeyUC))
+		} else {
+			msg.Use(middlewares.JWTAuthMiddleware())
+		}
+	} else {
+		msg.Use(middlewares.JWTAuthMiddleware())
+	}
 	{
 		msg.POST("/:device", whatsapp.SendMessage)
 	}
@@ -131,9 +173,9 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 				appContainer.UpdateAPIKeyUC,
 			)
 
-			// API Key management endpoints (requires JWT authentication)
+			// API Key management endpoints (requires authentication via JWT or API Key)
 			apiKeyGroup := r.Group("/api-keys")
-			apiKeyGroup.Use(middlewares.JWTAuthMiddleware())
+			apiKeyGroup.Use(middlewares.APIKeyOrJWTMiddleware(appContainer.ValidateAPIKeyUC))
 			{
 				apiKeyGroup.POST("", apiKeyHandler.GenerateKey)       // Generate new API key
 				apiKeyGroup.GET("", apiKeyHandler.ListKeys)           // List all user's API keys
