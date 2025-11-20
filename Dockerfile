@@ -1,8 +1,12 @@
 # ---------- Build Stage ----------
-FROM golang:1.25.1-alpine AS builder
+FROM golang:1.25.1-bookworm AS builder
 
 # Install build dependencies (needed for CGO and SQLite)
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    libsqlite3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -15,8 +19,6 @@ COPY . .
 
 # Build with CGO enabled (required for whatsmeow SQLite store)
 ENV CGO_ENABLED=1
-ENV GOOS=linux
-ENV GOARCH=amd64
 
 RUN go build -o main -ldflags="-s -w" .
 
