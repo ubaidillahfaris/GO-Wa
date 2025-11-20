@@ -319,7 +319,7 @@ func (c *Client) GetQRCode(ctx context.Context) (*domain.QRCodeResponse, error) 
 				DeviceName: c.deviceName,
 				QRCode:     evt.Code,
 				Timeout:    30,
-				ExpiresAt:  evt.Timeout,
+				ExpiresAt:  time.Now().Add(evt.Timeout),
 			}, nil
 		}
 		return nil, apperrors.NewWhatsAppError(fmt.Sprintf("Unknown QR event: %s", evt.Event), nil)
