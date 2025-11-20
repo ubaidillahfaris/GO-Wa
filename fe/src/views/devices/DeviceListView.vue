@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { devicesApi } from '@/api/devices'
 import { whatsappApi } from '@/api/whatsapp'
 import { useToast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Plus, Trash2, QrCode, Power } from 'lucide-vue-next'
+import { Plus, Trash2, QrCode, Power, RefreshCw } from 'lucide-vue-next'
 import DeviceCreateDialog from '@/components/devices/DeviceCreateDialog.vue'
 import DeviceDeleteDialog from '@/components/devices/DeviceDeleteDialog.vue'
 import QRCodeDialog from '@/components/devices/QRCodeDialog.vue'
@@ -14,6 +14,8 @@ import type { Device } from '@/types'
 const toast = useToast()
 const devices = ref<Device[]>([])
 const loading = ref(false)
+const autoRefresh = ref(true)
+let refreshInterval: number | null = null
 
 // Dialog states
 const showCreateDialog = ref(false)
@@ -21,18 +23,54 @@ const showDeleteDialog = ref(false)
 const showQRDialog = ref(false)
 const selectedDevice = ref<Device | null>(null)
 
-async function loadDevices() {
+async function loadDevices(silent = false) {
   try {
-    loading.value = true
+    if (!silent) {
+      loading.value = true
+    }
     const response = await devicesApi.list()
     if (response.data) {
       devices.value = response.data
     }
   } catch (error) {
     console.error('Failed to load devices:', error)
-    toast.error('Failed to load devices')
+    if (!silent) {
+      toast.error('Failed to load devices')
+    }
   } finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
+  }
+}
+
+function startAutoRefresh() {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+  }
+  // Refresh every 5 seconds
+  refreshInterval = window.setInterval(() => {
+    if (autoRefresh.value) {
+      loadDevices(true) // Silent refresh
+    }
+  }, 5000)
+}
+
+function stopAutoRefresh() {
+  if (refreshInterval) {
+    clearInterval(refreshInterval)
+    refreshInterval = null
+  }
+}
+
+function toggleAutoRefresh() {
+  autoRefresh.value = !autoRefresh.value
+  if (autoRefresh.value) {
+    startAutoRefresh()
+    toast.info('Auto-refresh enabled')
+  } else {
+    stopAutoRefresh()
+    toast.info('Auto-refresh disabled')
   }
 }
 
@@ -73,8 +111,18 @@ function handleDeviceConnected() {
   loadDevices()
 }
 
+async function handleManualRefresh() {
+  await loadDevices()
+  toast.success('Devices refreshed')
+}
+
 onMounted(() => {
   loadDevices()
+  startAutoRefresh()
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
 })
 </script>
 
@@ -85,10 +133,25 @@ onMounted(() => {
         <h2 class="text-3xl font-bold text-gray-900">Devices</h2>
         <p class="text-gray-600 mt-1">Manage your WhatsApp devices</p>
       </div>
-      <Button @click="openCreateDialog">
-        <Plus class="w-4 h-4 mr-2" />
-        Add Device
-      </Button>
+      <div class="flex gap-2">
+        <Button variant="outline" size="sm" @click="handleManualRefresh" :disabled="loading">
+          <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': loading }" />
+          Refresh
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          @click="toggleAutoRefresh"
+          :class="{ 'bg-green-50 text-green-600 border-green-600': autoRefresh }"
+        >
+          <RefreshCw class="w-4 h-4 mr-2" :class="{ 'animate-spin': autoRefresh }" />
+          Auto ({{ autoRefresh ? 'ON' : 'OFF' }})
+        </Button>
+        <Button @click="openCreateDialog">
+          <Plus class="w-4 h-4 mr-2" />
+          Add Device
+        </Button>
+      </div>
     </div>
 
     <Card v-if="loading">

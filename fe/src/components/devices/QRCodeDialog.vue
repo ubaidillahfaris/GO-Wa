@@ -19,18 +19,56 @@ const emit = defineEmits<{
 const toast = useToast()
 const loading = ref(false)
 const qrCodeUrl = ref<string | null>(null)
+let checkConnectionInterval: number | null = null
 
 watch(() => props.open, (isOpen) => {
   if (isOpen && props.device) {
     loadQRCode()
+    startCheckingConnection()
   } else {
     // Cleanup
+    stopCheckingConnection()
     if (qrCodeUrl.value) {
       URL.revokeObjectURL(qrCodeUrl.value)
       qrCodeUrl.value = null
     }
   }
 })
+
+function startCheckingConnection() {
+  stopCheckingConnection()
+
+  // Check connection status every 3 seconds
+  checkConnectionInterval = window.setInterval(async () => {
+    if (!props.device?._id || !qrCodeUrl.value) return
+
+    try {
+      const blob = await whatsappApi.getQRCode(props.device._id)
+
+      // If response is JSON (already connected), stop checking
+      if (blob.type === 'application/json') {
+        const text = await blob.text()
+        const response = JSON.parse(text)
+
+        if (response.status === 'success' && response.message?.includes('already connected')) {
+          stopCheckingConnection()
+          toast.success('Device connected successfully!')
+          emit('connected')
+          emit('update:open', false)
+        }
+      }
+    } catch (error) {
+      // Silently fail - continue checking
+    }
+  }, 3000)
+}
+
+function stopCheckingConnection() {
+  if (checkConnectionInterval) {
+    clearInterval(checkConnectionInterval)
+    checkConnectionInterval = null
+  }
+}
 
 async function loadQRCode() {
   if (!props.device?._id) return
@@ -46,12 +84,34 @@ async function loadQRCode() {
 
     const blob = await whatsappApi.getQRCode(props.device._id)
 
+    // Check if response is JSON (device already connected)
+    if (blob.type === 'application/json') {
+      const text = await blob.text()
+      const response = JSON.parse(text)
+
+      if (response.status === 'success' && response.message?.includes('already connected')) {
+        toast.success('Device is already connected!')
+        emit('connected')
+        emit('update:open', false)
+        return
+      }
+    }
+
     // Create object URL from blob
     qrCodeUrl.value = URL.createObjectURL(blob)
 
     toast.success('QR Code generated. Please scan to connect.')
   } catch (error: any) {
     console.error('Failed to load QR code:', error)
+
+    // Check if error response indicates device is already connected
+    if (error.response?.data?.message?.includes('already connected')) {
+      toast.success('Device is already connected!')
+      emit('connected')
+      emit('update:open', false)
+      return
+    }
+
     toast.error(error.response?.data?.error || 'Failed to load QR code')
     emit('update:open', false)
   } finally {
@@ -60,6 +120,7 @@ async function loadQRCode() {
 }
 
 function handleClose() {
+  stopCheckingConnection()
   if (qrCodeUrl.value) {
     URL.revokeObjectURL(qrCodeUrl.value)
     qrCodeUrl.value = null
@@ -69,6 +130,7 @@ function handleClose() {
 
 function handleRefresh() {
   loadQRCode()
+  startCheckingConnection()
 }
 </script>
 
@@ -102,6 +164,10 @@ function handleRefresh() {
           <p class="mt-4 text-sm text-gray-600 text-center">
             Open WhatsApp on your phone and scan this QR code
           </p>
+          <div class="mt-3 flex items-center gap-2 text-xs text-green-600">
+            <div class="w-2 h-2 bg-green-600 rounded-full animate-pulse"></div>
+            <span>Auto-detecting connection...</span>
+          </div>
         </div>
 
         <div v-else class="flex items-center justify-center h-64">
