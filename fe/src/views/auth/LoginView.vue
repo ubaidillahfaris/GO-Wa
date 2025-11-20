@@ -25,7 +25,13 @@ async function handleLogin() {
     toast.success('Login successful! Redirecting...')
     // Wait for next tick to ensure store is updated
     await nextTick()
-    router.push({ name: 'dashboard' })
+
+    // Force navigation with replace to avoid back button issues
+    console.log('Auth status:', authStore.isAuthenticated)
+    console.log('Token:', authStore.token)
+    console.log('User:', authStore.user)
+
+    await router.replace({ name: 'dashboard' })
   } else {
     toast.error(authStore.error || 'Login failed')
   }
