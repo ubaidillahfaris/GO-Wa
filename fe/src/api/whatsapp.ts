@@ -32,12 +32,19 @@ export const whatsappApi = {
 
   async sendMessage(device: string, payload: MessagePayload) {
     const formData = new FormData()
-    formData.append('receiver', payload.receiver)
+    formData.append('to', payload.to)
     formData.append('message', payload.message)
-    formData.append('receiverType', payload.receiverType)
+    formData.append('receiver_type', payload.receiver_type)
+    formData.append('message_type', payload.message_type || 'text')
+    formData.append('typing', payload.typing ? 'true' : 'false')
 
     if (payload.file) {
       formData.append('file', payload.file)
+      formData.append('filename', payload.filename || payload.file.name)
+      formData.append('caption', payload.caption || '')
+    } else {
+      formData.append('filename', '')
+      formData.append('caption', '')
     }
 
     const response = await apiClient.post<ApiResponse>(

@@ -58,10 +58,14 @@ export interface UpdateApiKeyRequest {
 }
 
 export interface MessagePayload {
-  receiver: string
+  to: string
   message: string
-  receiverType: 'individual' | 'group'
+  receiver_type: 'user' | 'group'
+  message_type?: 'text' | 'file'
+  typing?: boolean
   file?: File
+  filename?: string
+  caption?: string
 }
 
 export interface Contact {
