@@ -241,13 +241,32 @@ if [ "$USE_SSL" = true ]; then
             read -p "Continue with Let's Encrypt? [y/N]: " CONTINUE_LE
 
             if [[ $CONTINUE_LE =~ ^[Yy]$ ]]; then
-                if [ "$SCENARIO" = "2" ]; then
-                    print_info "Stopping nginx container temporarily..."
-                    docker compose -f "$COMPOSE_FILE" stop nginx 2>/dev/null || true
-                fi
+                print_info "Checking if port 80 is available..."
+                if sudo lsof -Pi :80 -sTCP:LISTEN -t >/dev/null 2>&1; then
+                    print_warning "Port 80 is already in use (likely existing nginx/web server)"
+                    print_info "Using webroot challenge instead of standalone..."
 
-                print_info "Running certbot..."
-                sudo certbot certonly --standalone -d "$DOMAIN"
+                    # Ask for webroot path
+                    read -p "Enter webroot path (e.g., /var/www/html): " WEBROOT_PATH
+                    if [ -z "$WEBROOT_PATH" ]; then
+                        WEBROOT_PATH="/var/www/html"
+                    fi
+
+                    print_info "Creating .well-known directory..."
+                    sudo mkdir -p "$WEBROOT_PATH/.well-known/acme-challenge"
+                    sudo chmod -R 755 "$WEBROOT_PATH/.well-known"
+
+                    print_info "Running certbot with webroot..."
+                    sudo certbot certonly --webroot -w "$WEBROOT_PATH" -d "$DOMAIN"
+                else
+                    if [ "$SCENARIO" = "2" ]; then
+                        print_info "Stopping nginx container temporarily..."
+                        docker compose -f "$COMPOSE_FILE" stop nginx 2>/dev/null || true
+                    fi
+
+                    print_info "Running certbot with standalone..."
+                    sudo certbot certonly --standalone -d "$DOMAIN"
+                fi
 
                 mkdir -p nginx/ssl
                 sudo cp "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" nginx/ssl/cert.pem
@@ -256,11 +275,52 @@ if [ "$USE_SSL" = true ]; then
 
                 print_success "Let's Encrypt certificate installed!"
 
-                # Setup auto-renewal
-                print_info "Setting up auto-renewal..."
-                CRON_CMD="0 2 * * * certbot renew --quiet --deploy-hook \"docker compose -f $(pwd)/$COMPOSE_FILE restart nginx\" 2>&1 | logger -t certbot"
-                (crontab -l 2>/dev/null | grep -v "certbot renew"; echo "$CRON_CMD") | crontab -
-                print_success "Auto-renewal configured (daily at 2 AM)"
+                # Setup auto-renewal (specific for this domain)
+                print_info "Setting up auto-renewal for $DOMAIN..."
+
+                # Determine reload command based on scenario
+                if [ "$SCENARIO" = "2" ]; then
+                    # Scenario 2: Fresh server with Docker nginx
+                    RELOAD_CMD="docker compose -f $(pwd)/$COMPOSE_FILE restart nginx"
+                elif [ "$SCENARIO" = "3" ]; then
+                    # Scenario 3: System nginx
+                    RELOAD_CMD="systemctl reload nginx"
+                elif [ "$SCENARIO" = "4" ]; then
+                    # Scenario 4: Existing nginx in Docker
+                    print_info "For nginx Docker, you need to add reload command manually"
+                    print_info "Example: docker exec <nginx-container> nginx -s reload"
+                    RELOAD_CMD="echo 'Manual reload needed for nginx docker'"
+                fi
+
+                # Create renewal hook script
+                mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+                cat > /tmp/whatsapp-renewal-$DOMAIN.sh <<EOF_RENEWAL
+#!/bin/bash
+# Auto-renewal hook for $DOMAIN
+if [ "\$RENEWED_DOMAINS" = "$DOMAIN" ]; then
+    # Copy certificates if needed
+    if [ -d "$(pwd)/nginx/ssl" ]; then
+        cp /etc/letsencrypt/live/$DOMAIN/fullchain.pem $(pwd)/nginx/ssl/cert.pem
+        cp /etc/letsencrypt/live/$DOMAIN/privkey.pem $(pwd)/nginx/ssl/key.pem
+        chmod 644 $(pwd)/nginx/ssl/*.pem
+    fi
+
+    # Reload nginx
+    $RELOAD_CMD
+
+    logger -t certbot-$DOMAIN "Certificate renewed and nginx reloaded"
+fi
+EOF_RENEWAL
+
+                sudo mv /tmp/whatsapp-renewal-$DOMAIN.sh /etc/letsencrypt/renewal-hooks/deploy/whatsapp-$DOMAIN.sh
+                sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/whatsapp-$DOMAIN.sh
+
+                # Add cron job for renewal check (once daily)
+                CRON_CMD="0 2 * * * certbot renew --quiet 2>&1 | logger -t certbot"
+                (crontab -l 2>/dev/null | grep -v "certbot renew" | grep -v "^$"; echo "$CRON_CMD") | crontab -
+
+                print_success "Auto-renewal configured for $DOMAIN (checks daily at 2 AM)"
+                print_info "Renewal hook: /etc/letsencrypt/renewal-hooks/deploy/whatsapp-$DOMAIN.sh"
             else
                 print_warning "Skipped Let's Encrypt setup. You can run it later with: make ssl-letsencrypt DOMAIN=$DOMAIN"
             fi
@@ -292,61 +352,114 @@ print_info "MongoDB User: $MONGO_USER"
 print_info "MongoDB Database: $MONGO_DB"
 echo ""
 
-# Deployment instructions
-print_header "Next Steps"
-case $SCENARIO in
-    1)
-        echo "Start your application with:"
-        echo "  ${GREEN}docker compose -f $COMPOSE_FILE up -d${NC}"
-        echo ""
-        echo "Access your application at:"
-        echo "  ${GREEN}http://localhost${NC}"
-        ;;
-    2)
-        echo "Deploy your application with:"
-        echo "  ${GREEN}docker compose -f $COMPOSE_FILE build${NC}"
-        echo "  ${GREEN}docker compose -f $COMPOSE_FILE up -d${NC}"
-        echo ""
-        if [ "$USE_SSL" = true ]; then
-            echo "Access your application at:"
-            echo "  ${GREEN}https://$DOMAIN${NC}"
-        fi
-        ;;
-    3)
-        echo "1. Deploy Docker containers (without nginx):"
-        echo "  ${GREEN}docker compose -f $COMPOSE_FILE up -d${NC}"
-        echo ""
-        echo "2. Copy nginx config to your system nginx:"
-        echo "  ${GREEN}sudo cp nginx/$NGINX_CONFIG /etc/nginx/sites-available/whatsapp${NC}"
-        echo "  ${GREEN}sudo ln -s /etc/nginx/sites-available/whatsapp /etc/nginx/sites-enabled/${NC}"
-        echo ""
-        echo "3. Update domain in nginx config:"
-        echo "  ${GREEN}sudo nano /etc/nginx/sites-available/whatsapp${NC}"
-        echo "  Change 'server_name' to: ${GREEN}$DOMAIN${NC}"
-        echo ""
-        echo "4. Test and reload nginx:"
-        echo "  ${GREEN}sudo nginx -t${NC}"
-        echo "  ${GREEN}sudo systemctl reload nginx${NC}"
-        ;;
-    4)
-        echo "1. Deploy Docker containers:"
-        echo "  ${GREEN}docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d${NC}"
-        echo ""
-        echo "2. Copy nginx config to your nginx container:"
-        echo "  ${GREEN}docker cp nginx/$NGINX_CONFIG <nginx-container>:/etc/nginx/conf.d/whatsapp.conf${NC}"
-        echo ""
-        echo "3. Update domain in the config, then reload nginx:"
-        echo "  ${GREEN}docker exec <nginx-container> nginx -t${NC}"
-        echo "  ${GREEN}docker exec <nginx-container> nginx -s reload${NC}"
-        ;;
-esac
+# Auto-deployment
+print_header "Deployment"
+echo ""
+read -p "Deploy now? [Y/n]: " DEPLOY_NOW
+DEPLOY_NOW=${DEPLOY_NOW:-Y}
+
+if [[ $DEPLOY_NOW =~ ^[Yy]$ ]]; then
+    case $SCENARIO in
+        1|2)
+            print_info "Building Docker images..."
+            docker compose --env-file $ENV_FILE -f $COMPOSE_FILE build
+
+            print_info "Starting services..."
+            docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d
+
+            print_success "Services started!"
+
+            # Wait for services to be ready
+            print_info "Waiting for services to be ready..."
+            sleep 10
+
+            # Show status
+            print_info "Service status:"
+            docker compose --env-file $ENV_FILE -f $COMPOSE_FILE ps
+            ;;
+        3)
+            print_info "Deploying Docker containers (without nginx)..."
+            docker compose --env-file $ENV_FILE -f $COMPOSE_FILE build
+            docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d
+
+            print_success "Docker containers started!"
+
+            echo ""
+            print_warning "Manual steps required:"
+            echo "2. Copy nginx config to your system nginx:"
+            echo "  ${GREEN}sudo cp nginx/$NGINX_CONFIG /etc/nginx/sites-available/whatsapp${NC}"
+            echo "  ${GREEN}sudo ln -s /etc/nginx/sites-available/whatsapp /etc/nginx/sites-enabled/${NC}"
+            echo ""
+            echo "3. Update domain in nginx config:"
+            echo "  ${GREEN}sudo nano /etc/nginx/sites-available/whatsapp${NC}"
+            echo "  Change 'server_name' to: ${GREEN}$DOMAIN${NC}"
+            echo ""
+            echo "4. Test and reload nginx:"
+            echo "  ${GREEN}sudo nginx -t${NC}"
+            echo "  ${GREEN}sudo systemctl reload nginx${NC}"
+            ;;
+        4)
+            print_info "Deploying Docker containers..."
+            docker compose --env-file $ENV_FILE -f $COMPOSE_FILE build
+            docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d
+
+            print_success "Docker containers started!"
+
+            echo ""
+            print_warning "Manual steps required:"
+            echo "2. Copy nginx config to your nginx container:"
+            echo "  ${GREEN}docker cp nginx/$NGINX_CONFIG <nginx-container>:/etc/nginx/conf.d/whatsapp.conf${NC}"
+            echo ""
+            echo "3. Update domain in the config (line 2, 11, 19):"
+            echo "  ${GREEN}docker exec <nginx-container> sed -i 's/wa.yourdomain.com/$DOMAIN/g' /etc/nginx/conf.d/whatsapp.conf${NC}"
+            echo ""
+            echo "4. Reload nginx:"
+            echo "  ${GREEN}docker exec <nginx-container> nginx -t${NC}"
+            echo "  ${GREEN}docker exec <nginx-container> nginx -s reload${NC}"
+            ;;
+    esac
+
+    echo ""
+    print_header "Access Your Application"
+    case $SCENARIO in
+        1)
+            echo "${GREEN}Frontend:${NC} http://localhost"
+            echo "${GREEN}API:${NC}      http://localhost/api/health"
+            ;;
+        2|3|4)
+            if [ "$USE_SSL" = true ]; then
+                echo "${GREEN}Frontend:${NC} https://$DOMAIN"
+                echo "${GREEN}API:${NC}      https://$DOMAIN/api/health"
+            else
+                echo "${GREEN}Frontend:${NC} http://$DOMAIN"
+                echo "${GREEN}API:${NC}      http://$DOMAIN/api/health"
+            fi
+            ;;
+    esac
+else
+    print_info "Skipping deployment. Deploy later with:"
+    echo ""
+    case $SCENARIO in
+        1|2)
+            echo "  ${GREEN}docker compose --env-file $ENV_FILE -f $COMPOSE_FILE build${NC}"
+            echo "  ${GREEN}docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d${NC}"
+            ;;
+        3|4)
+            echo "  ${GREEN}docker compose --env-file $ENV_FILE -f $COMPOSE_FILE build${NC}"
+            echo "  ${GREEN}docker compose --env-file $ENV_FILE -f $COMPOSE_FILE up -d${NC}"
+            echo ""
+            echo "Then follow manual steps for nginx configuration."
+            ;;
+    esac
+fi
 
 echo ""
 print_header "Useful Commands"
-echo "Check status:     ${GREEN}make status${NC}"
-echo "View logs:        ${GREEN}make logs${NC}"
-echo "Restart services: ${GREEN}make restart${NC}"
-echo "Health check:     ${GREEN}make health${NC}"
+echo "Check status:     ${GREEN}make status COMPOSE_FILE=$COMPOSE_FILE${NC}"
+echo "View logs:        ${GREEN}make logs COMPOSE_FILE=$COMPOSE_FILE${NC}"
+echo "Restart services: ${GREEN}make restart COMPOSE_FILE=$COMPOSE_FILE${NC}"
+echo "Health check:     ${GREEN}make health COMPOSE_FILE=$COMPOSE_FILE${NC}"
+echo "Stop services:    ${GREEN}make down COMPOSE_FILE=$COMPOSE_FILE${NC}"
 echo ""
 echo "For more information, see: ${BLUE}DEPLOYMENT_GUIDE.md${NC}"
 echo ""
