@@ -4,6 +4,20 @@
 COMPOSE_FILE ?= docker-compose.prod.yml
 PROJECT_NAME = whatsapp
 
+# Auto-detect environment file based on compose file
+ifeq ($(COMPOSE_FILE),docker-compose.localhost.yml)
+    ENV_FILE ?= .env.localhost
+else ifeq ($(COMPOSE_FILE),docker-compose.nginx-docker.yml)
+    ENV_FILE ?= .env.production
+else ifeq ($(COMPOSE_FILE),docker-compose.existing-nginx.yml)
+    ENV_FILE ?= .env.production
+else
+    ENV_FILE ?= .env.production
+endif
+
+# Docker compose command with env file
+DOCKER_COMPOSE = docker compose --env-file $(ENV_FILE) -f $(COMPOSE_FILE)
+
 # Colors
 GREEN  := $(shell tput -Txterm setaf 2)
 YELLOW := $(shell tput -Txterm setaf 3)
@@ -15,63 +29,63 @@ help: ## Show this help message
 
 build: ## Build all Docker images
 	@echo "$(GREEN)Building Docker images...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) build
+	$(DOCKER_COMPOSE) build
 
 build-no-cache: ## Build all Docker images without cache
 	@echo "$(GREEN)Building Docker images (no cache)...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) build --no-cache
+	$(DOCKER_COMPOSE) build --no-cache
 
 up: ## Start all services
 	@echo "$(GREEN)Starting services...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) up -d
+	$(DOCKER_COMPOSE) up -d
 	@echo "$(GREEN)Services started! Check status with: make status$(RESET)"
 
 down: ## Stop all services
 	@echo "$(YELLOW)Stopping services...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) down
+	$(DOCKER_COMPOSE) down
 
 restart: ## Restart all services
 	@echo "$(YELLOW)Restarting services...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) restart
+	$(DOCKER_COMPOSE) restart
 
 stop: ## Stop all services without removing containers
 	@echo "$(YELLOW)Stopping services...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) stop
+	$(DOCKER_COMPOSE) stop
 
 start: ## Start stopped services
 	@echo "$(GREEN)Starting services...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) start
+	$(DOCKER_COMPOSE) start
 
 status: ## Show services status
-	@docker-compose -f $(COMPOSE_FILE) ps
+	@$(DOCKER_COMPOSE) ps
 
 logs: ## Show logs for all services
-	docker-compose -f $(COMPOSE_FILE) logs -f --tail=100
+	$(DOCKER_COMPOSE) logs -f --tail=100
 
 logs-backend: ## Show backend logs
-	docker-compose -f $(COMPOSE_FILE) logs -f backend --tail=100
+	$(DOCKER_COMPOSE) logs -f backend --tail=100
 
 logs-frontend: ## Show frontend logs
-	docker-compose -f $(COMPOSE_FILE) logs -f frontend --tail=100
+	$(DOCKER_COMPOSE) logs -f frontend --tail=100
 
 logs-nginx: ## Show nginx logs
-	docker-compose -f $(COMPOSE_FILE) logs -f nginx --tail=100
+	$(DOCKER_COMPOSE) logs -f nginx --tail=100
 
 logs-mongo: ## Show MongoDB logs
-	docker-compose -f $(COMPOSE_FILE) logs -f mongo --tail=100
+	$(DOCKER_COMPOSE) logs -f mongo --tail=100
 
 shell-backend: ## Open shell in backend container
-	docker-compose -f $(COMPOSE_FILE) exec backend sh
+	$(DOCKER_COMPOSE) exec backend sh
 
 shell-frontend: ## Open shell in frontend container
-	docker-compose -f $(COMPOSE_FILE) exec frontend sh
+	$(DOCKER_COMPOSE) exec frontend sh
 
 shell-mongo: ## Open MongoDB shell
-	docker-compose -f $(COMPOSE_FILE) exec mongo mongosh
+	$(DOCKER_COMPOSE) exec mongo mongosh
 
 clean: ## Remove all containers, volumes, and images
 	@echo "$(YELLOW)Cleaning up Docker resources...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) down -v
+	$(DOCKER_COMPOSE) down -v
 	docker system prune -af
 
 clean-volumes: ## Remove all volumes (WARNING: deletes all data)
@@ -79,14 +93,14 @@ clean-volumes: ## Remove all volumes (WARNING: deletes all data)
 	@read -p "Are you sure? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		docker-compose -f $(COMPOSE_FILE) down -v; \
+		$(DOCKER_COMPOSE) down -v; \
 		echo "$(GREEN)Volumes removed$(RESET)"; \
 	fi
 
 backup: ## Backup MongoDB and volumes
 	@echo "$(GREEN)Creating backup...$(RESET)"
 	@mkdir -p backups
-	@docker-compose -f $(COMPOSE_FILE) exec -T mongo \
+	@$(DOCKER_COMPOSE) exec -T mongo \
 		mongodump --username=$${MONGO_USER} --password=$${MONGO_PASS} \
 		--authenticationDatabase=admin --db=whatsapp_production \
 		--archive > backups/mongodb_backup_$$(date +%Y%m%d_%H%M%S).archive
@@ -98,19 +112,19 @@ restore: ## Restore MongoDB from backup (usage: make restore FILE=backups/mongod
 		exit 1; \
 	fi
 	@echo "$(YELLOW)Restoring from $(FILE)...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) stop backend
-	docker-compose -f $(COMPOSE_FILE) exec -T mongo \
+	$(DOCKER_COMPOSE) stop backend
+	$(DOCKER_COMPOSE) exec -T mongo \
 		mongorestore --username=$${MONGO_USER} --password=$${MONGO_PASS} \
 		--authenticationDatabase=admin --drop \
 		--archive < $(FILE)
-	docker-compose -f $(COMPOSE_FILE) start backend
+	$(DOCKER_COMPOSE) start backend
 	@echo "$(GREEN)Restore completed!$(RESET)"
 
 health: ## Check health of all services
 	@echo "$(GREEN)Checking service health...$(RESET)"
 	@echo "Nginx: $$(curl -s -o /dev/null -w "%{http_code}" http://localhost/health)"
-	@echo "Backend: $$(docker-compose -f $(COMPOSE_FILE) exec -T backend curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health || echo 'N/A')"
-	@echo "MongoDB: $$(docker-compose -f $(COMPOSE_FILE) exec -T mongo mongosh --quiet --eval "db.adminCommand('ping').ok" 2>/dev/null || echo '0')"
+	@echo "Backend: $$($(DOCKER_COMPOSE) exec -T backend curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health || echo 'N/A')"
+	@echo "MongoDB: $$($(DOCKER_COMPOSE) exec -T mongo mongosh --quiet --eval "db.adminCommand('ping').ok" 2>/dev/null || echo '0')"
 
 deploy: build-no-cache down up ## Full deployment (build, stop, start)
 	@echo "$(GREEN)Deployment completed!$(RESET)"
@@ -118,10 +132,10 @@ deploy: build-no-cache down up ## Full deployment (build, stop, start)
 
 update: ## Update and restart services (zero-downtime)
 	@echo "$(GREEN)Updating services...$(RESET)"
-	docker-compose -f $(COMPOSE_FILE) build
-	docker-compose -f $(COMPOSE_FILE) up -d --no-deps --build backend
-	docker-compose -f $(COMPOSE_FILE) up -d --no-deps --build frontend
-	docker-compose -f $(COMPOSE_FILE) up -d --no-deps --build nginx
+	$(DOCKER_COMPOSE) build
+	$(DOCKER_COMPOSE) up -d --no-deps --build backend
+	$(DOCKER_COMPOSE) up -d --no-deps --build frontend
+	$(DOCKER_COMPOSE) up -d --no-deps --build nginx
 	@echo "$(GREEN)Update completed!$(RESET)"
 
 stats: ## Show resource usage statistics
@@ -167,12 +181,12 @@ ssl-letsencrypt: ## Setup Let's Encrypt SSL certificate
 		domain=$(DOMAIN); \
 	fi; \
 	echo "$(GREEN)Setting up Let's Encrypt for $$domain...$(RESET)"; \
-	docker-compose -f $(COMPOSE_FILE) stop nginx; \
+	$(DOCKER_COMPOSE) stop nginx; \
 	sudo certbot certonly --standalone -d $$domain; \
 	sudo cp /etc/letsencrypt/live/$$domain/fullchain.pem nginx/ssl/cert.pem; \
 	sudo cp /etc/letsencrypt/live/$$domain/privkey.pem nginx/ssl/key.pem; \
 	sudo chmod 644 nginx/ssl/*.pem; \
-	docker-compose -f $(COMPOSE_FILE) start nginx; \
+	$(DOCKER_COMPOSE) start nginx; \
 	echo "$(GREEN)SSL certificate installed!$(RESET)"
 
 configure-domain: ## Configure domain in nginx config
