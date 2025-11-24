@@ -1,0 +1,67 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+ARCHITECTURE.md
+DEPLOYMENT.md
+DOCKER_TLS_FIX.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build artifacts
+dist/
+build/
+tmp/
+*.exe
+*.test
+main
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Test files
+*_test.go
+test/
+coverage/
+*.tsbuildinfo
+
+# Backend specific
+be/stores/*.db
+be/uploads/
+be/keys/
+be/tmp/
+
+# Frontend specific
+fe/dist/
+fe/node_modules/

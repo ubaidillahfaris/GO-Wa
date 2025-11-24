@@ -8,19 +8,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+
 WORKDIR /app
 
-# Copy go modules files
+# Copy go modules files first for better layer caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download && go mod verify
 
 # Copy source code
 COPY . .
 
-# Build with CGO enabled (required for whatsmeow SQLite store)
+# Build with optimizations
 ENV CGO_ENABLED=1
 
-RUN go build -o main -ldflags="-s -w" .
+RUN go build -ldflags="-s -w" -o main .
 
 # ---------- Run Stage ----------
 FROM debian:bookworm-slim
@@ -30,9 +31,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libsqlite3-0 \
     tzdata \
-    wget \
+    curl \
     && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Set timezone
+ENV TZ=Asia/Jakarta
 
 # Create app user for security
 RUN groupadd -g 1000 appuser && \
@@ -43,15 +47,20 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/main .
 
-# Create necessary directories
-RUN mkdir -p /app/stores /app/uploads/whatsapp /app/keys && \
-    chown -R appuser:appuser /app
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/stores /app/uploads/whatsapp /app/keys /app/logs && \
+    chown -R appuser:appuser /app && \
+    chmod -R 755 /app
 
 # Switch to non-root user
 USER appuser
 
-# Expose port (configured via env)
+# Expose port
 EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Run the application
 CMD ["./main"]
