@@ -34,6 +34,15 @@ func (h *DeviceHandler) CreateDevice(c *gin.Context) {
 		return
 	}
 
+	// Get username from JWT
+	username, exists := c.Get("username")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	usernameStr := username.(string)
+	device.Owner = &usernameStr
+
 	// Validasi struct
 	validate := validator.New()
 	if err := validate.Struct(device); err != nil {
@@ -55,10 +64,21 @@ func (h *DeviceHandler) CreateDevice(c *gin.Context) {
 }
 
 func (h *DeviceHandler) ListDevices(c *gin.Context) {
+	// Get username from JWT
+	username, exists := c.Get("username")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
 
 	skip, limit := helpers.GetPagination(c, 20)
 
-	devices, err := h.Mongo.FindAllPaginate(c.Request.Context(), h.Collection, nil, &skip, &limit)
+	// Filter by owner
+	filter := map[string]interface{}{
+		"owner": username.(string),
+	}
+
+	devices, err := h.Mongo.FindAllPaginate(c.Request.Context(), h.Collection, filter, &skip, &limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -68,6 +88,13 @@ func (h *DeviceHandler) ListDevices(c *gin.Context) {
 }
 
 func (h *DeviceHandler) GetDevice(c *gin.Context) {
+	// Get username from JWT
+	username, exists := c.Get("username")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	idParam := c.Param("id")
 	id, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
@@ -81,14 +108,41 @@ func (h *DeviceHandler) GetDevice(c *gin.Context) {
 		return
 	}
 
+	// Check ownership
+	deviceOwner, ok := device["owner"].(string)
+	if !ok || deviceOwner != username.(string) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"device": device})
 }
 
 func (h *DeviceHandler) UpdateDevice(c *gin.Context) {
+	// Get username from JWT
+	username, exists := c.Get("username")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	idParam := c.Param("id")
 	id, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+		return
+	}
+
+	// Check ownership first
+	device, err := h.Mongo.FindByID(c.Request.Context(), h.Collection, id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		return
+	}
+
+	deviceOwner, ok := device["owner"].(string)
+	if !ok || deviceOwner != username.(string) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
 
@@ -99,6 +153,9 @@ func (h *DeviceHandler) UpdateDevice(c *gin.Context) {
 	}
 	data["updated_at"] = time.Now().Unix()
 
+	// Prevent owner change
+	delete(data, "owner")
+
 	if err := h.Mongo.Update(c.Request.Context(), h.Collection, id, data); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -108,10 +165,30 @@ func (h *DeviceHandler) UpdateDevice(c *gin.Context) {
 }
 
 func (h *DeviceHandler) DeleteDevice(c *gin.Context) {
+	// Get username from JWT
+	username, exists := c.Get("username")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	idParam := c.Param("id")
 	id, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ID"})
+		return
+	}
+
+	// Check ownership first
+	device, err := h.Mongo.FindByID(c.Request.Context(), h.Collection, id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		return
+	}
+
+	deviceOwner, ok := device["owner"].(string)
+	if !ok || deviceOwner != username.(string) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
 		return
 	}
 

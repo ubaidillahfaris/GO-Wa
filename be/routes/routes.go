@@ -121,6 +121,8 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 	} else {
 		wa.Use(middlewares.JWTAuthMiddleware())
 	}
+	// Add device ownership check middleware
+	wa.Use(middlewares.DeviceOwnershipMiddleware(mongo))
 	{
 		wa.GET("/:device/qrcode", whatsapp.GenerateQR)
 		wa.GET("/:device/status", whatsapp.GetStatus)
@@ -157,6 +159,8 @@ func RegisterRoutes(r *gin.Engine, mongo *db.MongoService, manager *services.Wha
 	} else {
 		msg.Use(middlewares.JWTAuthMiddleware())
 	}
+	// Add device ownership check middleware
+	msg.Use(middlewares.DeviceOwnershipMiddleware(mongo))
 	{
 		msg.POST("/:device", whatsapp.SendMessage)
 	}
