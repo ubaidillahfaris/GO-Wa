@@ -148,3 +148,40 @@ install: setup-env setup-ssl ## Initial setup (env + SSL)
 	@echo "$(GREEN)Initial setup completed!$(RESET)"
 	@echo "$(YELLOW)Remember to edit .env.production with your settings!$(RESET)"
 	@echo "$(YELLOW)For production, use proper SSL certificates (Let's Encrypt)$(RESET)"
+
+setup: ## Interactive setup wizard
+	@echo "╔══════════════════════════════════════════════════════════════╗"
+	@echo "║                                                              ║"
+	@echo "║          WhatsApp API - Interactive Setup Wizard            ║"
+	@echo "║                                                              ║"
+	@echo "╚══════════════════════════════════════════════════════════════╝"
+	@echo ""
+	@echo "$(GREEN)This wizard will help you configure your deployment.$(RESET)"
+	@echo ""
+	@./scripts/setup-wizard.sh
+
+ssl-letsencrypt: ## Setup Let's Encrypt SSL certificate
+	@if [ -z "$(DOMAIN)" ]; then \
+		read -p "Enter your domain (e.g., yourdomain.com): " domain; \
+	else \
+		domain=$(DOMAIN); \
+	fi; \
+	echo "$(GREEN)Setting up Let's Encrypt for $$domain...$(RESET)"; \
+	docker-compose -f $(COMPOSE_FILE) stop nginx; \
+	sudo certbot certonly --standalone -d $$domain; \
+	sudo cp /etc/letsencrypt/live/$$domain/fullchain.pem nginx/ssl/cert.pem; \
+	sudo cp /etc/letsencrypt/live/$$domain/privkey.pem nginx/ssl/key.pem; \
+	sudo chmod 644 nginx/ssl/*.pem; \
+	docker-compose -f $(COMPOSE_FILE) start nginx; \
+	echo "$(GREEN)SSL certificate installed!$(RESET)"
+
+configure-domain: ## Configure domain in nginx config
+	@if [ -z "$(DOMAIN)" ]; then \
+		read -p "Enter your domain (e.g., yourdomain.com): " domain; \
+	else \
+		domain=$(DOMAIN); \
+	fi; \
+	echo "$(GREEN)Configuring domain: $$domain$(RESET)"; \
+	sed -i.bak "s/__DOMAIN__/$$domain/g" nginx/nginx.production.conf; \
+	sed -i.bak "s/CORS_ALLOWED_ORIGIN=.*/CORS_ALLOWED_ORIGIN=https:\/\/$$domain/g" .env.production; \
+	echo "$(GREEN)Domain configured!$(RESET)"
