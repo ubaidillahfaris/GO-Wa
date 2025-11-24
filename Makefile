@@ -90,12 +90,8 @@ clean: ## Remove all containers, volumes, and images
 
 clean-volumes: ## Remove all volumes (WARNING: deletes all data)
 	@echo "$(YELLOW)WARNING: This will delete all data!$(RESET)"
-	@read -p "Are you sure? [y/N] " -n 1 -r; \
-	echo; \
-	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
-		$(DOCKER_COMPOSE) down -v; \
+	$(DOCKER_COMPOSE) down -v; \
 		echo "$(GREEN)Volumes removed$(RESET)"; \
-	fi
 
 backup: ## Backup MongoDB and volumes
 	@echo "$(GREEN)Creating backup...$(RESET)"
