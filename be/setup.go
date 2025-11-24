@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/ubaidillahfaris/whatsapp.git/db"
+	"github.com/ubaidillahfaris/whatsapp.git/internal/app"
 	"github.com/ubaidillahfaris/whatsapp.git/routes"
 	"github.com/ubaidillahfaris/whatsapp.git/services"
 )
@@ -24,11 +26,18 @@ func setup() (*gin.Engine, error) {
 
 	manager := services.GetWhatsAppManager()
 
+	// Initialize container for Clean Architecture components (API Keys, etc.)
+	container, err := app.NewContainer(context.Background())
+	if err != nil {
+		log.Printf("⚠️  Failed to initialize container: %v (API key routes will not be available)", err)
+		container = nil
+	}
+
 	r := gin.Default()
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"http://localhost:5173"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "Accept", "User-Agent", "Cache-Control", "Pragma"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "Accept", "User-Agent", "Cache-Control", "Pragma", "X-API-Key"}
 	config.ExposeHeaders = []string{"Content-Length"}
 	config.AllowCredentials = true
 	config.MaxAge = 12 * 60 * 60
@@ -36,9 +45,8 @@ func setup() (*gin.Engine, error) {
 	r.Use(cors.New(config))
 	r.OPTIONS("/*path", func(c *gin.Context) { c.Status(200) })
 
-	// Pass nil for container to maintain backward compatibility
-	// TODO: Migrate to container-based initialization for full Clean Architecture support
-	routes.RegisterRoutes(r, mongo, manager, nil)
+	// Pass container for API key routes
+	routes.RegisterRoutes(r, mongo, manager, container)
 
 	return r, nil
 }

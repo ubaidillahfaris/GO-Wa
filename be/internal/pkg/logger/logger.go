@@ -21,6 +21,9 @@ const (
 	FATAL
 )
 
+// Fields is a type alias for map[string]interface{} for convenience
+type Fields map[string]interface{}
+
 var levelNames = map[LogLevel]string{
 	DEBUG: "DEBUG",
 	INFO:  "INFO",
@@ -60,6 +63,22 @@ func New(prefix string) *Logger {
 // SetLevel sets the minimum log level
 func (l *Logger) SetLevel(level LogLevel) {
 	l.level = level
+}
+
+// WithPrefix returns a new logger with the specified prefix
+func (l *Logger) WithPrefix(prefix string) *Logger {
+	newLogger := &Logger{
+		prefix:   prefix,
+		level:    l.level,
+		logger:   l.logger,
+		fields:   make(map[string]interface{}),
+		useEmoji: l.useEmoji,
+	}
+	// Copy existing fields
+	for k, v := range l.fields {
+		newLogger.fields[k] = v
+	}
+	return newLogger
 }
 
 // WithField adds a field to the logger
@@ -174,7 +193,32 @@ func (l *Logger) Warn(msg string, args ...interface{}) {
 }
 
 // Error logs an error message
+// Supports multiple signatures:
+// - Error(msg string, args ...interface{}) - formatted message
+// - Error(msg string, err error) - message with error
+// - Error(msg string, err error, fields Fields) - message with error and fields
 func (l *Logger) Error(msg string, args ...interface{}) {
+	// Check if first arg is an error and second is Fields
+	if len(args) >= 2 {
+		if err, ok := args[0].(error); ok {
+			if fields, ok := args[1].(Fields); ok {
+				// Add error to fields
+				fields["error"] = err.Error()
+				l.WithFields(fields).log(ERROR, msg)
+				return
+			}
+		}
+	}
+
+	// Check if first arg is an error
+	if len(args) == 1 {
+		if err, ok := args[0].(error); ok {
+			l.WithField("error", err.Error()).log(ERROR, msg)
+			return
+		}
+	}
+
+	// Default formatted message
 	l.log(ERROR, msg, args...)
 }
 

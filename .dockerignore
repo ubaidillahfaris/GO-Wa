@@ -7,55 +7,61 @@
 *.md
 docs/
 ARCHITECTURE.md
-README.md
-
-# Docker
-Dockerfile
-docker-compose*.yaml
-.dockerignore
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# Build artifacts
-main
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Test files
-*_test.go
-testdata/
+DEPLOYMENT.md
+DOCKER_TLS_FIX.md
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*.swn
-.DS_Store
+*~
 
-# Dependencies (downloaded during build)
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies
+node_modules/
 vendor/
 
-# Runtime data
-stores/
-*.db
-*.db-shm
-*.db-wal
-uploads/
-keys/
-logs/
+# Build artifacts
+dist/
+build/
 tmp/
+*.exe
+*.test
+main
 
-# CI/CD
-.github/
-.gitlab-ci.yml
-Jenkinsfile
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
 
-# Development tools
-.air.toml
-tmp/
+# Test files
+*_test.go
+test/
+coverage/
+*.tsbuildinfo
+
+# Backend specific
+be/stores/*.db
+be/uploads/
+be/keys/
+be/tmp/
+
+# Frontend specific
+fe/dist/
+fe/node_modules/

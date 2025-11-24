@@ -155,10 +155,12 @@ type WhatsAppManagerInterface interface {
 	GetClient(deviceName string) (WhatsAppClientInterface, bool)
 	RemoveClient(ctx context.Context, deviceName string) error
 	ListClients() []string
+	GetClientCount() int
 
 	// Bulk Operations
 	DisconnectAll(ctx context.Context) error
 	GetAllConnectionInfo() []ConnectionInfo
+	LoadExistingDevices(ctx context.Context) error
 }
 
 // WhatsAppEventHandler defines the contract for handling WhatsApp events

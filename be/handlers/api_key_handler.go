@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -8,6 +9,28 @@ import (
 	"github.com/ubaidillahfaris/whatsapp.git/internal/core/usecases/apikey"
 	"github.com/ubaidillahfaris/whatsapp.git/internal/pkg/errors"
 )
+
+// handleError is a helper function to handle errors consistently
+func handleError(c *gin.Context, err error) {
+	if customErr, ok := err.(*errors.CustomError); ok {
+		statusCode := http.StatusInternalServerError
+		switch customErr.Type {
+		case errors.ErrTypeValidation:
+			statusCode = http.StatusBadRequest
+		case errors.ErrTypeUnauthorized:
+			statusCode = http.StatusUnauthorized
+		case errors.ErrTypeNotFound:
+			statusCode = http.StatusNotFound
+		case errors.ErrTypeConflict:
+			statusCode = http.StatusConflict
+		}
+		c.JSON(statusCode, gin.H{"error": customErr.Message})
+		c.Abort()
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	c.Abort()
+}
 
 // APIKeyHandler handles API key management requests
 type APIKeyHandler struct {
@@ -183,5 +206,25 @@ func (h *APIKeyHandler) RevokeKey(c *gin.Context) {
 
 	c.JSON(200, gin.H{
 		"message": "API key revoked successfully",
+	})
+}
+
+// TestKey handles POST /api-keys/test - Test an API key validity
+// This endpoint uses API key authentication (X-API-Key header)
+func (h *APIKeyHandler) TestKey(c *gin.Context) {
+	// Get username from context (set by API key middleware)
+	username, exists := c.Get("username")
+	if !exists {
+		handleError(c, errors.New(errors.ErrTypeUnauthorized, "API key authentication failed"))
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"message": "API key is valid",
+		"status":  "success",
+		"data": gin.H{
+			"authenticated_as": username,
+			"valid":            true,
+		},
 	})
 }

@@ -1,0 +1,61 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+ARCHITECTURE.md
+README.md
+
+# Docker
+Dockerfile
+docker-compose*.yaml
+.dockerignore
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+main
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+testdata/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+
+# Dependencies (downloaded during build)
+vendor/
+
+# Runtime data
+stores/
+*.db
+*.db-shm
+*.db-wal
+uploads/
+keys/
+logs/
+tmp/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+Jenkinsfile
+
+# Development tools
+.air.toml
+tmp/

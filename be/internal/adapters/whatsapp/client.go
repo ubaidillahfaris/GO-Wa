@@ -45,11 +45,11 @@ type Client struct {
 
 // ClientConfig holds configuration for creating a new client
 type ClientConfig struct {
-	DeviceName       string
-	StoresDir        string
-	EventHandler     domain.WhatsAppEventHandler
-	MaxConcurrency   int
-	LogLevel         string
+	DeviceName     string
+	StoresDir      string
+	EventHandler   domain.WhatsAppEventHandler
+	MaxConcurrency int
+	LogLevel       string
 }
 
 // NewClient creates a new WhatsApp client
@@ -319,7 +319,7 @@ func (c *Client) GetQRCode(ctx context.Context) (*domain.QRCodeResponse, error) 
 				DeviceName: c.deviceName,
 				QRCode:     evt.Code,
 				Timeout:    30,
-				ExpiresAt:  evt.Timeout,
+				ExpiresAt:  time.Now().Add(evt.Timeout),
 			}, nil
 		}
 		return nil, apperrors.NewWhatsAppError(fmt.Sprintf("Unknown QR event: %s", evt.Event), nil)
@@ -449,13 +449,7 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 	}
 
 	groups := make([]domain.WhatsAppGroup, 0, len(joinedGroups))
-	for _, jid := range joinedGroups {
-		// Get group info with retry logic
-		groupInfo, err := c.getGroupInfoWithRetry(ctx, jid)
-		if err != nil {
-			c.logger.Warn("Failed to get info for group %s: %v", jid.String(), err)
-			continue
-		}
+	for _, groupInfo := range joinedGroups {
 
 		if groupInfo == nil {
 			continue
@@ -466,15 +460,21 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 			participants = append(participants, p.JID.String())
 		}
 
+		// Get owner JID as string - OwnerJID is a value type, not pointer
+		ownerJID := ""
+		if groupInfo.OwnerJID.User != "" {
+			ownerJID = groupInfo.OwnerJID.String()
+		}
+
 		groups = append(groups, domain.WhatsAppGroup{
-			JID:          jid.String(),
-			Name:         groupInfo.Name,
-			Topic:        groupInfo.Topic,
-			OwnerJID:     groupInfo.OwnerJID.String(),
+			JID:          groupInfo.JID.String(),
+			Name:         groupInfo.GroupName.Name,
+			Topic:        groupInfo.GroupTopic.Topic,
+			OwnerJID:     ownerJID,
 			Participants: participants,
-			IsAnnounce:   groupInfo.IsAnnounce,
-			IsLocked:     groupInfo.IsLocked,
-			IsEphemeral:  groupInfo.IsEphemeral,
+			IsAnnounce:   groupInfo.GroupAnnounce.IsAnnounce,
+			IsLocked:     groupInfo.GroupLocked.IsLocked,
+			IsEphemeral:  groupInfo.GroupEphemeral.IsEphemeral,
 			CreatedAt:    groupInfo.GroupCreated,
 		})
 	}
@@ -487,7 +487,7 @@ func (c *Client) GetGroups(ctx context.Context) ([]domain.WhatsAppGroup, error) 
 func (c *Client) getGroupInfoWithRetry(ctx context.Context, jid types.JID) (*types.GroupInfo, error) {
 	maxRetries := 3
 	for i := 0; i < maxRetries; i++ {
-		info, err := c.client.GetGroupInfo(ctx, jid)
+		info, err := c.client.GetGroupInfo(jid)
 		if err == nil {
 			return info, nil
 		}

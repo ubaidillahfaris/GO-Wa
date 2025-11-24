@@ -19,6 +19,17 @@ const (
 	ErrorTypeWhatsApp       ErrorType = "WHATSAPP_ERROR"
 	ErrorTypeDatabase       ErrorType = "DATABASE_ERROR"
 	ErrorTypeConnection     ErrorType = "CONNECTION_ERROR"
+
+	// Aliases for backward compatibility
+	ErrTypeValidation   = ErrorTypeValidation
+	ErrTypeNotFound     = ErrorTypeNotFound
+	ErrTypeUnauthorized = ErrorTypeUnauthorized
+	ErrTypeForbidden    = ErrorTypeForbidden
+	ErrTypeConflict     = ErrorTypeConflict
+	ErrTypeInternal     = ErrorTypeInternal
+	ErrTypeWhatsApp     = ErrorTypeWhatsApp
+	ErrTypeDatabase     = ErrorTypeDatabase
+	ErrTypeConnection   = ErrorTypeConnection
 )
 
 // AppError represents a custom application error
@@ -29,6 +40,9 @@ type AppError struct {
 	Details    map[string]interface{} `json:"details,omitempty"`
 	Err        error                  `json:"-"`
 }
+
+// CustomError is an alias for AppError for backward compatibility
+type CustomError = AppError
 
 // Error implements the error interface
 func (e *AppError) Error() string {
@@ -139,4 +153,13 @@ func NewConnectionError(message string, err error) *AppError {
 
 func NewInternalError(message string, err error) *AppError {
 	return Wrap(err, ErrorTypeInternal, message)
+}
+
+// IsNotFound checks if error is a not found error
+func IsNotFound(err error) bool {
+	var appErr *AppError
+	if errors.As(err, &appErr) {
+		return appErr.Type == ErrorTypeNotFound
+	}
+	return false
 }

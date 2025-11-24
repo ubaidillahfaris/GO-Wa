@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/composables/useToast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,6 +10,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 
 const router = useRouter()
 const authStore = useAuthStore()
+const toast = useToast()
 
 const username = ref('')
 const password = ref('')
@@ -20,21 +22,28 @@ async function handleRegister() {
 
   if (password.value !== confirmPassword.value) {
     passwordError.value = 'Passwords do not match'
+    toast.error('Passwords do not match')
     return
   }
 
   if (password.value.length < 6) {
     passwordError.value = 'Password must be at least 6 characters'
+    toast.error('Password must be at least 6 characters')
     return
   }
 
   const success = await authStore.register({
     username: username.value,
     password: password.value,
+    confirm_password: confirmPassword.value,
   })
 
   if (success) {
-    router.push({ name: 'dashboard' })
+    toast.success('Registration successful! Redirecting...')
+    await nextTick()
+    await router.replace({ name: 'dashboard' })
+  } else {
+    toast.error(authStore.error || 'Registration failed')
   }
 }
 </script>

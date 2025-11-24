@@ -26,9 +26,21 @@ func NewAuthenticateHandler() *AuthenticateHandler {
 func (h *AuthenticateHandler) Register(mongo *db.MongoService, c *gin.Context) error {
 	h.mongo = mongo
 
-	username := c.PostForm("username")
-	password := c.PostForm("password")
-	confirmPassword := c.PostForm("confirm_password")
+	// Parse JSON body instead of form data
+	var registerReq struct {
+		Username        string `json:"username" binding:"required"`
+		Password        string `json:"password" binding:"required"`
+		ConfirmPassword string `json:"confirm_password" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&registerReq); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid request body"})
+		return err
+	}
+
+	username := registerReq.Username
+	password := registerReq.Password
+	confirmPassword := registerReq.ConfirmPassword
 
 	if password != confirmPassword {
 		c.JSON(400, gin.H{"error": "Passwords do not match"})
@@ -49,15 +61,36 @@ func (h *AuthenticateHandler) Register(mongo *db.MongoService, c *gin.Context) e
 		c.JSON(500, gin.H{"error": "Failed to register user"})
 		return err
 	}
-	c.JSON(200, gin.H{"message": "User registered successfully"})
+
+	// Return format that matches frontend expectations
+	c.JSON(200, gin.H{
+		"message": "User registered successfully",
+		"data": gin.H{
+			"user": gin.H{
+				"username": username,
+			},
+		},
+	})
 	return nil
 
 }
 
 func (h *AuthenticateHandler) Authenticate(c *gin.Context) error {
 	ctx := context.Background()
-	username := c.PostForm("username")
-	password := c.PostForm("password")
+
+	// Parse JSON body instead of form data
+	var loginReq struct {
+		Username string `json:"username" binding:"required"`
+		Password string `json:"password" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&loginReq); err != nil {
+		c.JSON(400, gin.H{"error": "Invalid request body"})
+		return err
+	}
+
+	username := loginReq.Username
+	password := loginReq.Password
 
 	users, _ := db.Mongo.FindAll(ctx, "users", bson.M{"username": username}, nil, nil)
 	if len(users) == 0 {
@@ -75,6 +108,10 @@ func (h *AuthenticateHandler) Authenticate(c *gin.Context) error {
 
 	// Generate JWT token
 	token, err := utils.GenerateToken(username)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to generate token"})
+		return err
+	}
 
 	c.SetCookie(
 		"jwt",
@@ -86,9 +123,15 @@ func (h *AuthenticateHandler) Authenticate(c *gin.Context) error {
 		true,
 	)
 
+	// Return format that matches frontend expectations
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login successful",
-		"token":   token,
+		"data": gin.H{
+			"token": token,
+			"user": gin.H{
+				"username": username,
+			},
+		},
 	})
 	return nil
 }
