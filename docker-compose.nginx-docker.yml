@@ -1,0 +1,90 @@
+services:
+  # MongoDB Database
+  mongo:
+    container_name: whatsapp-mongo-prod
+    image: mongo:7.0
+    restart: always
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASS}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-qr_db}
+    networks:
+      - whatsapp-internal  # Internal network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Backend API
+  backend:
+    container_name: whatsapp-backend-prod
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    restart: always
+    volumes:
+      - whatsapp-stores:/app/stores
+      - whatsapp-uploads:/app/uploads
+      - app-keys:/app/keys
+      - app-logs:/app/logs
+    environment:
+      PORT: 3000
+      ENVIRONMENT: production
+      MONGO_USER: ${MONGO_USER}
+      MONGO_PASS: ${MONGO_PASS}
+      MONGO_HOST: mongo:27017
+      MONGO_DB: ${MONGO_DB:-qr_db}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_MIN: ${JWT_EXPIRES_MIN:-60}
+      WHATSAPP_STORES_DIR: ./stores
+      WHATSAPP_UPLOADS_DIR: ./uploads/whatsapp
+      WHATSAPP_MAX_CONCURRENCY: ${WHATSAPP_MAX_CONCURRENCY:-10}
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN}
+      CORS_MAX_AGE: ${CORS_MAX_AGE:-43200}
+    networks:
+      - whatsapp-internal  # Internal network
+      - nginx-network      # Join nginx network
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  # Frontend
+  frontend:
+    container_name: whatsapp-frontend-prod
+    build:
+      context: ./fe
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=/api
+    restart: always
+    networks:
+      - nginx-network      # Join nginx network
+
+volumes:
+  mongo-data:
+    driver: local
+  mongo-config:
+    driver: local
+  whatsapp-stores:
+    driver: local
+  whatsapp-uploads:
+    driver: local
+  app-keys:
+    driver: local
+  app-logs:
+    driver: local
+
+networks:
+  # Internal network (MongoDB only)
+  whatsapp-internal:
+    driver: bridge
+
+  # External network (join nginx docker network)
+  nginx-network:
+    external: true
+    name: YOUR_NGINX_NETWORK_NAME  # Ganti dengan nama network nginx Anda
